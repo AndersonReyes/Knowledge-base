@@ -2,18 +2,91 @@
 
 ## Table of Contents
 
-1. [Network Topology: Structured vs Unstructured Overlays](#1-network-topology-structured-vs-unstructured-overlays)
-2. [Distributed Hash Tables](#2-distributed-hash-tables)
-   - [Chord](#21-chord)
-   - [Kademlia](#22-kademlia)
-3. [Content Addressing & Data Integrity](#3-content-addressing--data-integrity)
-4. [BitTorrent Protocol Internals](#4-bittorrent-protocol-internals)
-5. [NAT Traversal](#5-nat-traversal)
-6. [IPFS Architecture](#6-ipfs-architecture)
+1. [Textbook Reference: Kurose & Ross — Chapter 2.5 (8th Ed.)](#1-textbook-reference-kurose--ross--chapter-25-8th-ed)
+2. [Network Topology: Structured vs Unstructured Overlays](#2-network-topology-structured-vs-unstructured-overlays)
+3. [Distributed Hash Tables](#3-distributed-hash-tables)
+   - [Chord](#31-chord)
+   - [Kademlia](#32-kademlia)
+4. [Content Addressing & Data Integrity](#4-content-addressing--data-integrity)
+5. [BitTorrent Protocol Internals](#5-bittorrent-protocol-internals)
+6. [NAT Traversal](#6-nat-traversal)
+7. [IPFS Architecture](#7-ipfs-architecture)
 
 ---
 
-## 1. Network Topology: Structured vs Unstructured Overlays
+## 1. Textbook Reference: Kurose & Ross — Chapter 2.5 (8th Ed.)
+
+> Kurose, J. & Ross, K. (2022). *Computer Networking: A Top-Down Approach* (8th ed.), Section 2.5.
+
+### 1.1 Client-Server vs P2P Distribution Time
+
+A clean model for comparing architectures. Assumptions: abundant core bandwidth, all bottlenecks in access links, peers dedicate full bandwidth to the transfer.
+
+**Variables**:
+- `F` — file size (bits)
+- `N` — number of peers
+- `u_s` — server upload rate
+- `u_i` — upload rate of peer `i`
+- `d_min` — lowest download rate among all peers
+
+**Client-Server lower bound**:
+
+```
+D_cs = max(NF/u_s, F/d_min)
+```
+
+- `NF/u_s`: server must send the full file N times; only the server uploads.
+- `F/d_min`: slowest peer determines the floor.
+- For large N, `NF/u_s` dominates → **linear growth with N**. Double the peers, double the time. Unbounded.
+
+**P2P lower bound**:
+
+```
+D_p2p = max(F/u_s, F/d_min, NF/(u_s + Σu_i))
+```
+
+- `F/u_s`: server must seed at least one copy into the network.
+- `F/d_min`: same floor as above.
+- `NF/(u_s + Σu_i)`: total bits to deliver is `NF`; total system upload capacity is `u_s + Σu_i`. Each peer that joins adds to `Σu_i`, growing the denominator.
+
+**Key result**: As N grows, both the numerator (`NF`) and denominator (`u_s + Σu_i`) grow together. `D_p2p` stays bounded — empirically below 1 hour for any N when peers have symmetric bandwidth. P2P is *self-scaling*: every new consumer is also a new contributor.
+
+### 1.2 BitTorrent Mechanics (Textbook Treatment)
+
+**Bootstrap**:
+1. New peer registers with the **tracker** (infrastructure node tracking active peers).
+2. Tracker returns a random subset (~50 peers).
+3. New peer attempts TCP connections to all 50 → successful connections = **neighboring peers**.
+4. Neighbors fluctuate as peers join/leave; connections are maintained dynamically.
+
+**Chunk exchange**:
+- File split into equal-size chunks (256 KB typical).
+- Periodically, each peer requests the chunk list from all neighbors.
+- Peer has no chunks initially; accumulates over time.
+- Once complete, peer may leave (selfish) or stay and seed (altruistic).
+
+**Rarest first**:
+- From chunks the peer doesn't have, identify which are rarest among neighbors (fewest copies).
+- Request those first.
+- Effect: rare chunks get redistributed quickly → equalizes copy counts across the swarm → reduces catastrophic data loss if a seeder leaves.
+
+**Tit-for-tat / Unchoking**:
+- Peer measures incoming bit rate from each neighbor continuously.
+- **Top 4**: unchoke the 4 neighbors sending data at the highest rate (recalculated every 10s). Reciprocate by sending chunks to them.
+- **Optimistic unchoke**: every 30s, pick 1 random choked-but-interested neighbor and unchoke it without requiring reciprocation.
+- All others: **choked** (receive nothing).
+
+**Why it works**:
+- Optimistic unchoke lets new peers (who have nothing to trade yet) receive chunks, giving them something to offer.
+- If the probed peer starts sending back at a good rate, it earns a top-4 slot.
+- Peers with compatible upload rates converge on trading with each other.
+- Free-riders (download only) stay choked by everyone and get poor performance.
+
+The textbook notes this incentive scheme (tit-for-tat) can be gamed [Liogkas 2006; Locher 2006; Piatek 2008], but the ecosystem is robust in practice because the majority of peers cooperate — if they didn't, BitTorrent would collapse to the same dynamics as a free-rider network [Saroiu 2002].
+
+---
+
+## 2. Network Topology: Structured vs Unstructured Overlays
 
 P2P networks are categorized by how nodes connect and route queries.
 
@@ -37,7 +110,7 @@ Real-world structured overlays: Kademlia (BitTorrent DHT, IPFS), Chord (theoreti
 
 ---
 
-## 2. Distributed Hash Tables
+## 3. Distributed Hash Tables
 
 A DHT maps keys (typically content hashes) to values (peer addresses) across a decentralized network with no central authority. Each node stores a fraction of the total keyspace.
 
@@ -46,7 +119,7 @@ Core operations:
 - `GET(key)` → value — retrieve
 - Node join/leave (churn handling)
 
-### 2.1 Chord
+### 3.1 Chord
 
 > Stoica et al., "Chord: A Scalable Peer-to-Peer Lookup Service for Internet Applications," ACM SIGCOMM 2001. Won ACM SIGCOMM Test of Time Award 2011.
 
@@ -76,7 +149,7 @@ Lookup forwards to the finger entry closest to (but not past) the target. Each h
 
 ---
 
-### 2.2 Kademlia
+### 3.2 Kademlia
 
 > Maymounkov & Mazières, "Kademlia: A Peer-to-Peer Information System Based on the XOR Metric," IPTPS 2002.
 
@@ -138,7 +211,7 @@ In BitTorrent's DHT, the "value" stored is a compact peer list (IP:port) for a g
 
 ---
 
-## 3. Content Addressing & Data Integrity
+## 4. Content Addressing & Data Integrity
 
 Rather than locating data by address (where it is), content addressing locates data by hash (what it is).
 
@@ -146,7 +219,7 @@ Rather than locating data by address (where it is), content addressing locates d
 
 | Hash | Output | Used in |
 |------|--------|---------|
-| SHA-1 | 160-bit | BitTorrent v1, Git (legacy) |
+| SHA-1 | 160-bit | BitTorrent v1, Git (default) |
 | SHA-256 | 256-bit | BitTorrent v2, IPFS CIDs |
 | BLAKE2/BLAKE3 | variable | IPFS (multihash), modern systems |
 
@@ -200,11 +273,11 @@ IPFS uses Merkle DAG as its core data structure, extended to IPLD (InterPlanetar
 
 ---
 
-## 4. BitTorrent Protocol Internals
+## 5. BitTorrent Protocol Internals
 
 All formal specs: https://www.bittorrent.org/beps/bep_0000.html
 
-### 4.1 .torrent File & Info-Hash
+### 5.1 .torrent File & Info-Hash
 
 `.torrent` files use **Bencode** encoding:
 - Integer: `i42e`
@@ -227,7 +300,7 @@ All formal specs: https://www.bittorrent.org/beps/bep_0000.html
 
 **Magnet link**: `magnet:?xt=urn:btih:<infohash-hex>&dn=<name>&tr=<tracker-url>`
 
-### 4.2 Peer Discovery
+### 5.2 Peer Discovery
 
 Three mechanisms, used in parallel:
 
@@ -247,7 +320,7 @@ Three mechanisms, used in parallel:
 - Max one PEX message per minute (batched deltas: added + dropped peers).
 - Data is untrusted — validate before connecting. Faster and more current than DHT.
 
-### 4.3 Wire Protocol (BEP 3)
+### 5.3 Wire Protocol (BEP 3)
 
 **Handshake** (68 bytes):
 ```
@@ -276,7 +349,7 @@ Block size is typically 16 KB (2^14 bytes). A piece is made of multiple blocks.
 
 **Full spec**: https://wiki.theory.org/BitTorrentSpecification | https://www.bittorrent.org/beps/bep_0003.html
 
-### 4.4 Piece Selection: Rarest First
+### 5.4 Piece Selection: Rarest First
 
 Each peer tracks how many copies of each piece exist among its connected peers. Download priority:
 1. **Rarest first**: Request pieces that fewest peers have. Maximizes piece diversity across the swarm, reduces load on seeders, prevents catastrophic loss if a seeder leaves.
@@ -286,7 +359,7 @@ Each peer tracks how many copies of each piece exist among its connected peers. 
 
 **Ref**: Bram Cohen, "Incentives Build Robustness in BitTorrent," P2P Systems Workshop, 2003.
 
-### 4.5 Choking / Unchoking
+### 5.5 Choking / Unchoking
 
 BitTorrent uses a tit-for-tat mechanism to incentivize uploading.
 
@@ -302,7 +375,7 @@ Result: free-riders (download only, upload nothing) get choked by everyone and r
 
 ---
 
-## 5. NAT Traversal
+## 6. NAT Traversal
 
 Most peers sit behind NAT. Direct inbound connections are blocked. P2P systems need techniques to punch through.
 
@@ -368,7 +441,7 @@ BEP 55 (Holepunch Extension): allows two peers behind NAT to coordinate hole pun
 
 ---
 
-## 6. IPFS Architecture
+## 7. IPFS Architecture
 
 > Juan Benet, "IPFS - Content Addressed, Versioned, P2P File System," arXiv:1407.3561, 2014.
 
@@ -378,7 +451,7 @@ BEP 55 (Holepunch Extension): allows two peers behind NAT to coordinate hole pun
 
 IPFS is a content-addressed P2P file system. Instead of `https://host/path`, you address content by `CID` (content identifier = hash of the data).
 
-### 6.1 Content Identifiers (CIDs)
+### 7.1 Content Identifiers (CIDs)
 
 **Docs**: https://docs.ipfs.tech/concepts/content-addressing/
 
@@ -394,7 +467,7 @@ Example (CIDv1, base32):
 bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi
 ```
 
-### 6.2 libp2p
+### 7.2 libp2p
 
 **Specs**: https://github.com/libp2p/specs  
 **Site**: https://libp2p.io
@@ -415,7 +488,7 @@ Multiaddr notation encodes a full routable address:
 /dns4/peer.example.com/tcp/443/wss/p2p/QmPeerId
 ```
 
-### 6.3 KAD-DHT (Content Routing)
+### 7.3 KAD-DHT (Content Routing)
 
 **Spec**: https://specs.ipfs.tech/routing/kad-dht/
 
@@ -428,7 +501,7 @@ Two DHT modes:
 `FIND_PROVIDERS(CID)` — returns peers that have announced they hold the CID.  
 `PROVIDE(CID)` — announce you hold a CID (republished every 12 hours, expires after 24h).
 
-### 6.4 Bitswap
+### 7.4 Bitswap
 
 **Docs**: https://docs.ipfs.tech/concepts/bitswap/
 
@@ -442,7 +515,7 @@ Block exchange protocol. Generalizes BitTorrent's piece exchange to arbitrary CI
 
 Unlike BitTorrent, there is no strict tit-for-tat; Bitswap uses a credit system (ledger per peer pair) but enforcement is lax in practice.
 
-### 6.5 UnixFS
+### 7.5 UnixFS
 
 **Spec**: https://specs.ipfs.tech/data-formats/unixfs/
 
@@ -454,7 +527,7 @@ Data format for representing traditional filesystem objects (files, directories,
 
 Directory: a dag-pb node whose links are `(name, CID)` pairs pointing to child file/directory nodes.
 
-### 6.6 IPNS (Mutable Naming)
+### 7.6 IPNS (Mutable Naming)
 
 **Docs**: https://docs.ipfs.tech/concepts/ipns/
 
@@ -466,7 +539,7 @@ CIDs are immutable — updating a file changes its CID. IPNS creates mutable poi
 - To resolve: `FIND_VALUE(IPNS_name)` → CID.
 - Only the holder of the private key can publish a new record (higher sequence number wins).
 
-### 6.7 Protocol Stack Summary
+### 7.7 Protocol Stack Summary
 
 ```
 Application (UnixFS, IPNS)
@@ -529,75 +602,3 @@ TCP / QUIC / WebSockets
 - IPFS KAD-DHT spec: https://specs.ipfs.tech/routing/kad-dht/
 - libp2p specs: https://github.com/libp2p/specs
 - Git internals (content addressing reference): https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
-
----
-
-## 7. Textbook Reference: Kurose & Ross — Chapter 2.5 (8th Ed.)
-
-> Kurose, J. & Ross, K. (2022). *Computer Networking: A Top-Down Approach* (8th ed.), Section 2.5.
-
-### 7.1 Client-Server vs P2P Distribution Time
-
-A clean model for comparing architectures. Assumptions: abundant core bandwidth, all bottlenecks in access links, peers dedicate full bandwidth to the transfer.
-
-**Variables**:
-- `F` — file size (bits)
-- `N` — number of peers
-- `u_s` — server upload rate
-- `u_i` — upload rate of peer `i`
-- `d_min` — lowest download rate among all peers
-
-**Client-Server lower bound**:
-
-```
-D_cs = max(NF/u_s, F/d_min)
-```
-
-- `NF/u_s`: server must send the full file N times; only the server uploads.
-- `F/d_min`: slowest peer determines the floor.
-- For large N, `NF/u_s` dominates → **linear growth with N**. Double the peers, double the time. Unbounded.
-
-**P2P lower bound**:
-
-```
-D_p2p = max(F/u_s, F/d_min, NF/(u_s + Σu_i))
-```
-
-- `F/u_s`: server must seed at least one copy into the network.
-- `F/d_min`: same floor as above.
-- `NF/(u_s + Σu_i)`: total bits to deliver is `NF`; total system upload capacity is `u_s + Σu_i`. Each peer that joins adds to `Σu_i`, growing the denominator.
-
-**Key result**: As N grows, both the numerator (`NF`) and denominator (`u_s + Σu_i`) grow together. `D_p2p` stays bounded — empirically below 1 hour for any N when peers have symmetric bandwidth. P2P is *self-scaling*: every new consumer is also a new contributor.
-
-### 7.2 BitTorrent Mechanics (Textbook Treatment)
-
-**Bootstrap**:
-1. New peer registers with the **tracker** (infrastructure node tracking active peers).
-2. Tracker returns a random subset (~50 peers).
-3. New peer attempts TCP connections to all 50 → successful connections = **neighboring peers**.
-4. Neighbors fluctuate as peers join/leave; connections are maintained dynamically.
-
-**Chunk exchange**:
-- File split into equal-size chunks (256 KB typical).
-- Periodically, each peer requests the chunk list from all neighbors.
-- Peer has no chunks initially; accumulates over time.
-- Once complete, peer may leave (selfish) or stay and seed (altruistic).
-
-**Rarest first**:
-- From chunks the peer doesn't have, identify which are rarest among neighbors (fewest copies).
-- Request those first.
-- Effect: rare chunks get redistributed quickly → equalizes copy counts across the swarm → reduces catastrophic data loss if a seeder leaves.
-
-**Tit-for-tat / Unchoking**:
-- Peer measures incoming bit rate from each neighbor continuously.
-- **Top 4**: unchoke the 4 neighbors sending data at the highest rate (recalculated every 10s). Reciprocate by sending chunks to them.
-- **Optimistic unchoke**: every 30s, pick 1 random choked-but-interested neighbor and unchoke it without requiring reciprocation.
-- All others: **choked** (receive nothing).
-
-**Why it works**:
-- Optimistic unchoke lets new peers (who have nothing to trade yet) receive chunks, giving them something to offer.
-- If the probed peer starts sending back at a good rate, it earns a top-4 slot.
-- Peers with compatible upload rates converge on trading with each other.
-- Free-riders (download only) stay choked by everyone and get poor performance.
-
-The textbook notes this incentive scheme (tit-for-tat) can be gamed [Liogkas 2006; Locher 2006; Piatek 2008], but the ecosystem is robust in practice because the majority of peers cooperate — if they didn't, BitTorrent would collapse to the same dynamics as a free-rider network [Saroiu 2002].
