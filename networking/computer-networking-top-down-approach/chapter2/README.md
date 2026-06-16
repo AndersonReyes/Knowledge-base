@@ -13,3 +13,4 @@
 | 2.5 | Peer-to-Peer File Distribution | [2.5-peer-to-peer-distributed-file-sharing.md](2.5-peer-to-peer-distributed-file-sharing.md) |
 | 2.6 | Video Streaming and Content Distribution Networks | [2.6-video-streaming-and-cdn.md](2.6-video-streaming-and-cdn.md) |
 | 2.7 | Socket Programming: Creating Network Applications | [2.7-socket-programming.md](2.7-socket-programming.md) |
+| — | Programming Assignments (Web Server, UDP Pinger, Mail Client, Proxy) | [programming-assignments.md](programming-assignments.md) |
