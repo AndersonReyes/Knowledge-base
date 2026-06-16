@@ -17,11 +17,7 @@ A personal knowledge base for technical notes, textbook summaries, and deep-dive
 | Video Streaming & CDN — DASH, CDN architecture, Netflix, YouTube | Kurose & Ross Ch. 2.6 | [notes](networking/computer-networking-top-down-approach/chapter2/2.6-video-streaming-and-cdn.md) |
 | Socket Programming — UDP/TCP in Python | Kurose & Ross Ch. 2.7 | [notes](networking/computer-networking-top-down-approach/chapter2/2.7-socket-programming.md) |
 
-### Peer-to-Peer
-
-| Topic | Source | File |
-|-------|--------|------|
-| P2P Distributed File Sharing — DHT, Kademlia, Chord, BitTorrent internals, NAT traversal, IPFS | Kurose & Ross Ch. 2.5 + deep-dive (BEPs, RFCs, papers) | [notes](networking/computer-networking-top-down-approach/peer2peer/peer-to-peer-distributed-file-sharing.md) |
+| P2P Distributed File Sharing — DHT, Kademlia, Chord, BitTorrent internals, NAT traversal, IPFS | Kurose & Ross Ch. 2.5 + deep-dive (BEPs, RFCs, papers) | [notes](networking/computer-networking-top-down-approach/chapter2/2.5-peer-to-peer-distributed-file-sharing.md) |
 
 ---
 
