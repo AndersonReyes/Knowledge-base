@@ -529,3 +529,75 @@ TCP / QUIC / WebSockets
 - IPFS KAD-DHT spec: https://specs.ipfs.tech/routing/kad-dht/
 - libp2p specs: https://github.com/libp2p/specs
 - Git internals (content addressing reference): https://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+
+---
+
+## 7. Textbook Reference: Kurose & Ross — Chapter 2.5 (8th Ed.)
+
+> Kurose, J. & Ross, K. (2022). *Computer Networking: A Top-Down Approach* (8th ed.), Section 2.5.
+
+### 7.1 Client-Server vs P2P Distribution Time
+
+A clean model for comparing architectures. Assumptions: abundant core bandwidth, all bottlenecks in access links, peers dedicate full bandwidth to the transfer.
+
+**Variables**:
+- `F` — file size (bits)
+- `N` — number of peers
+- `u_s` — server upload rate
+- `u_i` — upload rate of peer `i`
+- `d_min` — lowest download rate among all peers
+
+**Client-Server lower bound**:
+
+```
+D_cs = max(NF/u_s, F/d_min)
+```
+
+- `NF/u_s`: server must send the full file N times; only the server uploads.
+- `F/d_min`: slowest peer determines the floor.
+- For large N, `NF/u_s` dominates → **linear growth with N**. Double the peers, double the time. Unbounded.
+
+**P2P lower bound**:
+
+```
+D_p2p = max(F/u_s, F/d_min, NF/(u_s + Σu_i))
+```
+
+- `F/u_s`: server must seed at least one copy into the network.
+- `F/d_min`: same floor as above.
+- `NF/(u_s + Σu_i)`: total bits to deliver is `NF`; total system upload capacity is `u_s + Σu_i`. Each peer that joins adds to `Σu_i`, growing the denominator.
+
+**Key result**: As N grows, both the numerator (`NF`) and denominator (`u_s + Σu_i`) grow together. `D_p2p` stays bounded — empirically below 1 hour for any N when peers have symmetric bandwidth. P2P is *self-scaling*: every new consumer is also a new contributor.
+
+### 7.2 BitTorrent Mechanics (Textbook Treatment)
+
+**Bootstrap**:
+1. New peer registers with the **tracker** (infrastructure node tracking active peers).
+2. Tracker returns a random subset (~50 peers).
+3. New peer attempts TCP connections to all 50 → successful connections = **neighboring peers**.
+4. Neighbors fluctuate as peers join/leave; connections are maintained dynamically.
+
+**Chunk exchange**:
+- File split into equal-size chunks (256 KB typical).
+- Periodically, each peer requests the chunk list from all neighbors.
+- Peer has no chunks initially; accumulates over time.
+- Once complete, peer may leave (selfish) or stay and seed (altruistic).
+
+**Rarest first**:
+- From chunks the peer doesn't have, identify which are rarest among neighbors (fewest copies).
+- Request those first.
+- Effect: rare chunks get redistributed quickly → equalizes copy counts across the swarm → reduces catastrophic data loss if a seeder leaves.
+
+**Tit-for-tat / Unchoking**:
+- Peer measures incoming bit rate from each neighbor continuously.
+- **Top 4**: unchoke the 4 neighbors sending data at the highest rate (recalculated every 10s). Reciprocate by sending chunks to them.
+- **Optimistic unchoke**: every 30s, pick 1 random choked-but-interested neighbor and unchoke it without requiring reciprocation.
+- All others: **choked** (receive nothing).
+
+**Why it works**:
+- Optimistic unchoke lets new peers (who have nothing to trade yet) receive chunks, giving them something to offer.
+- If the probed peer starts sending back at a good rate, it earns a top-4 slot.
+- Peers with compatible upload rates converge on trading with each other.
+- Free-riders (download only) stay choked by everyone and get poor performance.
+
+The textbook notes this incentive scheme (tit-for-tat) can be gamed [Liogkas 2006; Locher 2006; Piatek 2008], but the ecosystem is robust in practice because the majority of peers cooperate — if they didn't, BitTorrent would collapse to the same dynamics as a free-rider network [Saroiu 2002].
