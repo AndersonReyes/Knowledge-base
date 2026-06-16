@@ -39,6 +39,25 @@ D_cs = max(NF/u_s, F/d_min)
 - `F/d_min`: slowest peer determines the floor.
 - For large N, `NF/u_s` dominates → **linear growth with N**. Double the peers, double the time. Unbounded.
 
+```mermaid
+flowchart LR
+    subgraph Server
+        S["Server\nupload: u_s"]
+    end
+    subgraph Peers
+        P1["Peer 1\nup: u_1, down: d_1"]
+        P2["Peer 2\nup: u_2, down: d_2"]
+        P3["Peer N\nup: u_N, down: d_N"]
+    end
+    Internet(("Internet"))
+    S -->|"file F"| Internet
+    Internet --> P1
+    Internet --> P2
+    Internet --> P3
+    P1 <-->|"P2P redistribution"| P2
+    P2 <-->|"P2P redistribution"| P3
+```
+
 **P2P lower bound**:
 
 ```
@@ -58,6 +77,27 @@ D_p2p = max(F/u_s, F/d_min, NF/(u_s + Σu_i))
 2. Tracker returns a random subset (~50 peers).
 3. New peer attempts TCP connections to all 50 → successful connections = **neighboring peers**.
 4. Neighbors fluctuate as peers join/leave; connections are maintained dynamically.
+
+```mermaid
+flowchart TD
+    Tracker["Tracker\n(registers peers,\nreturns peer list)"]
+    subgraph Torrent["Torrent (swarm)"]
+        Alice["Alice\n(new peer)"]
+        P1["Peer 1"]
+        P2["Peer 2"]
+        P3["Peer 3"]
+        P4["Peer 4"]
+        P5["Peer 5"]
+    end
+    Alice -->|"1. register"| Tracker
+    Tracker -->|"2. return ~50 peer IPs"| Alice
+    Alice -->|"3. TCP connections"| P1
+    Alice -->|"3. TCP connections"| P2
+    Alice -->|"3. TCP connections"| P3
+    P1 <-->|"chunk exchange"| P2
+    P2 <-->|"chunk exchange"| P4
+    P3 <-->|"chunk exchange"| P5
+```
 
 **Chunk exchange**:
 - File split into equal-size chunks (256 KB typical).
